@@ -1,7 +1,21 @@
 /**
  * Cosine-similarity helpers and optional embedding fetching.
+ *
+ * The embedding path is entirely optional.  When no `--embed-url` is configured
+ * the server falls back to exact key matching only, and none of the async code
+ * in this module is called.
  */
 
+/**
+ * Compute the cosine similarity between two vectors.
+ *
+ * Returns `0` for mismatched lengths, empty inputs, or zero-norm vectors so
+ * that callers never receive a `NaN` or division-by-zero result.
+ *
+ * @param a - First float vector.
+ * @param b - Second float vector (must have the same length as `a`).
+ * @returns A value in [-1, 1], or 0 on degenerate input.
+ */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0, normA = 0, normB = 0;
@@ -14,6 +28,20 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+/**
+ * Call an external HTTP endpoint to obtain a float embedding vector.
+ *
+ * Supports both Ollama-style (`{"prompt": ...}`) and OpenAI-style
+ * (`{"input": ...}`) request payloads, selected by inspecting `apiUrl`.
+ *
+ * Returns `null` on any network or parsing error so callers degrade gracefully
+ * without throwing.
+ *
+ * @param apiUrl - Full URL of the embeddings endpoint.
+ * @param model - Model name to include in the request body.
+ * @param text - The text to embed.
+ * @returns A non-empty number array on success, or `null` on failure.
+ */
 export async function fetchEmbedding(
   apiUrl: string,
   model: string,
@@ -66,6 +94,20 @@ export async function fetchEmbedding(
   return null;
 }
 
+/**
+ * Find the highest-scoring similarity match among candidate cache rows.
+ *
+ * Iterates over `{ result, embedding }` objects, parses each stored embedding,
+ * and returns the result string whose embedding has the highest cosine similarity
+ * to `queryEmb` — provided that similarity meets or exceeds `threshold`.
+ *
+ * Rows with unparseable embeddings are silently skipped.
+ *
+ * @param rows - Array of `{ result, embedding }` objects from the database.
+ * @param queryEmb - The embedding of the lookup query.
+ * @param threshold - Minimum cosine similarity required for a match.
+ * @returns The best-matching result string, or `null` if no candidate clears the threshold.
+ */
 export function findSimilarityMatch(
   rows: Array<{ result: string; embedding: string }>,
   queryEmb: number[],
